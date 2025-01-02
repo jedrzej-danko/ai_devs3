@@ -13,6 +13,9 @@ services:
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
         bind:
             $openAiApiKey: '%open_ai%'
+            $projectDir: '%kernel.project_dir%'
+            $poligonApiKey: '%env(POLIGON_API_KEY)%'
+
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
