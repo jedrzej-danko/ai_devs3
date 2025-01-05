@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Service\OpenAIFactory;
 use App\Service\Poligon;
 use App\Service\PoligonException;
+use App\Solution\S03E01;
+use App\Solution\S03E02;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerAwareTrait;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -24,80 +26,30 @@ class S03Controller extends AbstractController implements LoggerAwareInterface
     }
 
     #[Route('/s03/e01')]
-    public function e01(string $projectDir, Poligon $poligon)
+    public function e01(string $projectDir, Poligon $poligon, S03E01 $solution)
     {
-        $context = 'Z przedstawionego dokumentu wyciągnij wszystkie słowa kluczowe, które mogą się do niego odnosić.
-        Jeśli to możliwe, uwzględnij datę i czas, wszystkie informacje dotyczące lokalizacji, nazwy osób i inne nazwy własne,
-        a także wszelkie inne informacje, które mogą być istotne.
-        Z nazwy pliku pozyskaj datę i nazwę sektora w postaci litery i cyfry (np. sektor C4). 
-        Rzeczowniki zwracaj w postaci mianownika liczby pojedynczej. 
-        Nie pomijaj dodatkowych określeń rzeczownika (np. jednostka organiczna).
-        Uwzględnij istotne czynności (np. wykrycie /  patrol kontynuowany / patrol zakończony itp). 
-        Listę słów kluczowych przedstaw w postaci listy, oddzielonej przecinkami.
-        Nie dodawaj etykiet ("data", "czas", "imię" itp)
-        W słowach kluczowych nie używaj znaków interpunkcyjnych (w tym dwukropka).      
-        
-        Dla każdego słowa kluczowego będącego imieniem i nazwiskiem wykorzystaj bazę faktów do utworzenia dodatkowych słów kluczowych,
-        opisujących osobę (np. Jan Kowalski -> Jan Kowalski, pracownik fabryki, pracownik działu kontroli).
-        
-        Fakty: 
-        
-        ';
-
         $knowledgeDir = $projectDir . '/data/pliki_z_fabryki/facts';
-        foreach (new \DirectoryIterator($knowledgeDir) as $fileInfo) {
-            // only txt files
-            if (!$fileInfo->isFile() || $fileInfo->getExtension() !== 'txt') {
-                continue;
-            }
-            $content = file_get_contents($fileInfo->getPathname());
-            $context .= "$content\n";
-        }
-
-//        $knowledgeDir = $projectDir . '/data/pliki_z_fabryki';
-//        foreach (new \DirectoryIterator($knowledgeDir) as $fileInfo) {
-//            // only txt files
-//            if (!$fileInfo->isFile() || $fileInfo->getExtension() !== 'txt') {
-//                continue;
-//            }
-//            $content = file_get_contents($fileInfo->getPathname());
-//            $context .= "<document>
-//$content
-//</document>";
-//        }
-//        return new Response($context);
+        $facts = new \DirectoryIterator($knowledgeDir);
 
         $dataDir = $projectDir . '/data/pliki_z_fabryki';
-        $client = $this->openAIFactory->getClient();
 
         $dir = new \DirectoryIterator($dataDir);
         $result = [];
-        foreach ($dir as $fileInfo) {
+        foreach ($dir as $report) {
             // only txt files
-            if (!$fileInfo->isFile() || $fileInfo->getExtension() !== 'txt') {
+            if (!$report->isFile() || $report->getExtension() !== 'txt') {
                 continue;
             }
-            $content = file_get_contents($fileInfo->getPathname());
-            $chat = $client->chat()->create([
-                'model' => 'gpt-4o-mini',
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => $context,
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => "nazwa pliku: {$fileInfo->getFilename()}
-                        {$content}",
-                    ],
-                ],
-            ]);
 
-            $result[$fileInfo->getFilename()] = $chat->choices[0]->message->content;
+            $keywords = $solution->solve($facts, $report);
+
+            $result[$report->getFilename()] = join(', ', $keywords);
         }
 
         try {
-            $response = $poligon->send('https://centrala.ag3nts.org/report', 'dokumenty',
+            $response = $poligon->send(
+                'https://centrala.ag3nts.org/report',
+                'dokumenty',
                 $result
             );
 
@@ -106,22 +58,37 @@ class S03Controller extends AbstractController implements LoggerAwareInterface
             $result['response'] = $e->getResponse()->getContent(false);
             return $this->json($result);
         }
+    }
 
+    #[Route('/s03/e02')]
+    public function e02(Poligon $poligon, string $projectDir, S03E02 $solution): Response
+    {
+        $result = $solution->solve(
+            $projectDir . '/data/pliki_z_fabryki/',
+            'W raporcie, z którego dnia znajduje się wzmianka o kradzieży prototypu broni?'
+        );
+        $date = null;
+        foreach ($result['result'] as $item) {
+            $date = $item['payload']['date'];
+        }
+        try {
+            $response = $poligon->send(
+                'https://centrala.ag3nts.org/report',
+                'wektory',
+                $date
+            );
 
-//        $chat = $client->chat()->create([
-//            'model' => 'gpt-4o-mini',
-//            'messages' => [
-//                [
-//                    'role' => 'system',
-//                    'content' => $context,
-//                ],
-//                [
-//                    'role' => 'user',
-//                    'content' => 'nazwa pliku: 2024-11-12_report-00-sektor_C4.txt
-//                    Godzina 22:43. Wykryto jednostkę organiczną w pobliżu północnego skrzydła fabryki. Osobnik przedstawił się jako Aleksander Ragowski. Przeprowadzono skan biometryczny, zgodność z bazą danych potwierdzona. Jednostka przekazana do działu kontroli. Patrol kontynuowany.',
-//                ],
-//            ],
-//        ]);
-//        return new Response($chat->choices[0]->message->content);
+            return $this->json(
+                array_merge(
+                    $result['result'],
+                    ['date' => $date],
+                    ['response' => $response]
+                ));
+        } catch (PoligonException $e) {
+            $result = $result['result'];
+            $result['response'] = $e->getResponse()->getContent(false);
+            $result['date'] = $date;
+            return $this->json($result);
+        }
     }
 }

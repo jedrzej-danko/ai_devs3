@@ -8,10 +8,12 @@
         "ext-ctype": "*",
         "ext-dom": "*",
         "ext-iconv": "*",
+        "ext-libxml": "*",
         "doctrine/dbal": "^3",
         "doctrine/doctrine-bundle": "^2.13",
         "doctrine/doctrine-migrations-bundle": "^3.3",
         "doctrine/orm": "^3.3",
+        "hkulekci/qdrant": "^0.5.8",
         "nyholm/psr7": "^1.8",
         "openai-php/client": "^0.10.2",
         "phpdocumentor/reflection-docblock": "^5.5",
@@ -41,14 +43,13 @@
         "symfony/string": "7.1.*",
         "symfony/translation": "7.1.*",
         "symfony/twig-bundle": "7.1.*",
+        "symfony/uid": "7.1.*",
         "symfony/ux-turbo": "^2.21",
         "symfony/validator": "7.1.*",
         "symfony/web-link": "7.1.*",
         "symfony/yaml": "7.1.*",
         "twig/extra-bundle": "^2.12|^3.0",
-        "twig/twig": "^2.12|^3.0",
-      "ext-libxml": "*",
-      "ext-http": "*"
+        "twig/twig": "^2.12|^3.0"
     },
     "config": {
         "allow-plugins": {
